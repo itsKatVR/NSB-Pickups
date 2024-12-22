@@ -1,18 +1,12 @@
-using Basis.Scripts.Addressable_Driver;
-using Basis.Scripts.Addressable_Driver.Enums;
-using Basis.Scripts.Addressable_Driver.Factory;
-using Basis.Scripts.Addressable_Driver.Resource;
+
 
 using UnityEngine;
-using UnityEngine.InputSystem;
 using Basis.Scripts.UI;
 using Basis.Scripts.Networking.NetworkedPlayer;
 using Basis.Scripts.BasisSdk.Players;
 using Basis.Scripts.Device_Management;
 using System.Collections.Generic;
-using System;
 using System.Linq;
-using UnityEditor.VersionControl;
 using Basis.Scripts.Device_Management.Devices;
 
 public class PlayerInteract : MonoBehaviour
@@ -68,8 +62,8 @@ public class PlayerInteract : MonoBehaviour
         for (int Index = 0; Index < count; Index++)
         {
             BasisInput device = BasisDeviceManagement.Instance.AllInputDevices[Index];
-            // if we can raycast retain in our devices
-            if (device.BasisDeviceMatchableNames.HasRayCastSupport)
+            // if we can raycast retain in our devices.
+            if (device.BasisDeviceMatchableNames.HasRayCastSupport && !pickupDevices.ContainsKey(Index))
             {
                 device.gameObject.AddComponent(typeof(LineRenderer));
                 LineRenderer lineRenderer = device.gameObject.GetComponent<LineRenderer>();
@@ -79,19 +73,23 @@ public class PlayerInteract : MonoBehaviour
                 lineRenderer.enabled = false;
                 lineRenderer.useWorldSpace = true;
                 lineRenderer.positionCount = 2;
-                lineRenderer.numCapVertices = 6;
+                lineRenderer.numCapVertices = 1;
                 lineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
                 PickupDevice pickupDevice = new PickupDevice();
                 pickupDevice.input = device;
                 pickupDevice.lineRenderer = lineRenderer;
+
+                pickupDevice.state = InteractableObjectState.Empty;
+                
                 pickupDevices[Index] = pickupDevice;
             }
             else
             {
-                Destroy(pickupDevices[Index].lineRenderer);
-                // remove any old devices if our input devices has changed, above will overwrite existing.
-                pickupDevices.Remove(Index);
+                // TODO: remove other devices (needs VR testing)
+                // Destroy(pickupDevices[Index].lineRenderer);
+                // // remove any old devices if our input devices has changed, above will overwrite existing.
+                // pickupDevices.Remove(Index);
             }
         }
 
@@ -100,6 +98,7 @@ public class PlayerInteract : MonoBehaviour
         {
 
             PickupDevice pickupDevice = pickupDevices.ElementAt(Index).Value;
+
 
             if (pickupDevice.input == null)
             {
@@ -125,7 +124,7 @@ public class PlayerInteract : MonoBehaviour
 
 
                 // TODO: self and remote stealing
-                if (hitInteractable != null && hitInteractable.IsWithinRange(transform))
+                if (hitInteractable != null)
                 {
 
 
@@ -139,26 +138,27 @@ public class PlayerInteract : MonoBehaviour
                             switch (pickupDevice.state)
                             {
                                 case InteractableObjectState.Highlighting:
-                                    pickupDevice.targetObject.HighlightObject(false);
+                                    if(hitInteractable.GetInstanceID() != pickupDevice.targetObject.GetInstanceID()) {
+                                        pickupDevice.targetObject.HighlightObject(false);
+                                    }
                                     break;
                                 case InteractableObjectState.Holding:
-                                    if(hitInteractable.GetInstanceID() != pickupDevice.targetObject.GetInstanceID()) {
-                                        pickupDevice.targetObject.Drop();
-                                    }
                                     break;
                                 default:
                                     pickupDevice.targetObject = null;
+                                    pickupDevice.state = InteractableObjectState.Empty;
                                     break;
                             }
                         }
 
 
-                        // pickup highlighted
+                        // pickup only highlighted
                         if (pickupDevice.state == InteractableObjectState.Highlighting)
                         {
-                            bool skipSameObject = !pickupDevices.Any(x => x.Value.targetObject != null && x.Value.targetObject.GetInstanceID() == hitInteractable.GetInstanceID());
-                            // no self steal
-                            if (skipSameObject || (!pickupDevice.targetObject.IsHeld() || pickupDevice.targetObject.GetInstanceID() == hitInteractable.GetInstanceID()))
+                            bool alreadyHeld = pickupDevices.Any(x => x.Value.targetObject != null && x.Value.targetObject.GetInstanceID() == hitInteractable.GetInstanceID()) || hitInteractable.IsHeld();
+                            bool sameTarget = pickupDevice.targetObject != null && pickupDevice.targetObject.GetInstanceID() == hitInteractable.GetInstanceID();
+                            
+                            if (!alreadyHeld && hitInteractable.IsWithinRange(transform) || sameTarget)
                             {
                                 pickupDevice.rayHit = hit;
                                 pickupDevice.targetObject = hitInteractable;
@@ -169,34 +169,36 @@ public class PlayerInteract : MonoBehaviour
                         
 
                     }
+                    // not holding
                     // highlight if we arent holding, drop any held
                     else
                     {
                         // handle previous states
                         if(pickupDevice.targetObject != null) {
                             // hit a different interactable
-                            if(hitInteractable.GetInstanceID() != pickupDevice.targetObject.GetInstanceID()) {
-                                switch (pickupDevice.state)
-                                {
-                                    case InteractableObjectState.Highlighting:
+
+                            bool sameTarget = hitInteractable.GetInstanceID() == pickupDevice.targetObject.GetInstanceID();
+                            switch (pickupDevice.state)
+                            {
+                                case InteractableObjectState.Highlighting:
+                                    if(!sameTarget) {
                                         pickupDevice.targetObject.HighlightObject(false);
-                                        break;
-                                    case InteractableObjectState.Holding:
-                                        pickupDevice.targetObject.Drop();
-                                        break;
-                                    default:
-                                        pickupDevice.targetObject = null;
-                                        break;
-                                }
-                            } else {
-                                if (pickupDevice.state == InteractableObjectState.Holding) {
+                                    }
+                                    break;
+                                case InteractableObjectState.Holding:
+                                    // no longer holding
                                     pickupDevice.targetObject.Drop();
-                                }
+                                    pickupDevice.state = InteractableObjectState.Empty;
+                                    break;
+                                default:
+                                    pickupDevice.targetObject = null;
+                                    pickupDevice.state = InteractableObjectState.Empty;
+                                    break;
                             }
                         }
                         
                         // TODO: self steal
-                        if (!hitInteractable.IsHeld()) {
+                        if (!hitInteractable.IsHeld() && hitInteractable.IsWithinRange(transform)) {
                             pickupDevice.rayHit = hit;
                             pickupDevice.targetObject = hitInteractable;
                             pickupDevice.state = InteractableObjectState.Highlighting;
@@ -212,81 +214,35 @@ public class PlayerInteract : MonoBehaviour
                     switch (pickupDevice.state)
                     {
                         case InteractableObjectState.Highlighting:
+                            pickupDevice.state = InteractableObjectState.Empty;
                             pickupDevice.targetObject.HighlightObject(false);
                             break;
                         case InteractableObjectState.Holding:
-                            pickupDevice.targetObject.Drop();
+                        // Debug.LogError("missed raycast while holding, trigger: " + pickupDevice.input.InputState.Trigger);
+                            // keep holding anyway
+                            if (pickupDevice.input.InputState.Trigger == 1) {
+                                pickupDevice.state = InteractableObjectState.Holding;
+                                pickupDevice.targetObject.PickUp(pickupDevice.input.transform);
+                                
+                            } 
+                            // missed and dropped
+                            else {
+                                pickupDevice.state = InteractableObjectState.Empty;
+                                pickupDevice.targetObject.Drop();
+                            }
+                            
                             break;
                         default:
+                            pickupDevice.state = InteractableObjectState.Empty;
                             pickupDevice.targetObject = null;
                             break;
                     }
                 }
-                pickupDevice.targetObject = null;
-                pickupDevice.state = InteractableObjectState.Empty;
             }
             
             // write changes back into dictionary
             pickupDevices[pickupDevices.ElementAt(Index).Key] = pickupDevice;
         }
-
-        // // apply grab
-        // List<InteractableObject> toRemoveHeld = new List<InteractableObject>();
-        // foreach ((InteractableObject, BasisInput) held in heldObjects)
-        // {
-        //     Transform activelyHeldBy = null;
-        //     foreach (KeyValuePair<int, PickupDevice> kv in pickupDevices)
-        //     {
-        //         if (kv.Value.targetObject != null && kv.Value.targetObject.GetInstanceID() == held.Item1.GetInstanceID() && kv.Value.input.GetInstanceID() == held.Item2.GetInstanceID())
-        //         {
-        //             activelyHeldBy = kv.Value.input.transform;
-        //         }
-        //     }
-        //     if (activelyHeldBy != null)
-        //     {
-        //         held.Item1.PickUp(activelyHeldBy.transform);
-        //     }
-        //     else
-        //     {
-        //         // no longer actively held
-        //         held.Item1.Drop();
-        //         toRemoveHeld.Add(held.Item1);
-        //     }
-        // }
-        // foreach (InteractableObject interactable in toRemoveHeld)
-        // {
-        //     heldObjects.RemoveAll(x => x.Item1.GetInstanceID() == interactable.GetInstanceID());
-        // }
-
-        // // apply highlighting
-        // List<InteractableObject> toRemoveHighlight = new List<InteractableObject>();
-        // foreach (InteractableObject interactable in highlightedObjects)
-        // {
-        //     if (interactable == null) { continue; }
-
-        //     bool isActivelyHighlighed = false;
-        //     foreach (KeyValuePair<int, PickupDevice> kv in pickupDevices)
-        //     {
-        //         if (kv.Value.highlightedObject != null && kv.Value.highlightedObject.GetInstanceID() == interactable.GetInstanceID())
-        //         {
-        //             isActivelyHighlighed = true;
-        //         }
-        //     }
-        //     if (isActivelyHighlighed)
-        //     {
-        //         interactable.HighlightObject(true);
-        //     }
-        //     else
-        //     {
-        //         interactable.HighlightObject(false);
-        //         toRemoveHighlight.Add(interactable);
-        //     }
-        // }
-        // foreach (InteractableObject interactable in toRemoveHighlight)
-        // {
-        //     highlightedObjects.Remove(interactable);
-        // }
-
 
         // apply line renderer
         if (renderInteractLine)
