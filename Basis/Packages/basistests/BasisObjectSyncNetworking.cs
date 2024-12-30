@@ -19,8 +19,11 @@ public class BasisObjectSyncNetworking : MonoBehaviour
     public BasisPositionRotationScale Storeddata = new BasisPositionRotationScale();
     public InteractableObject iObject;
 
+    public event Action<ushort, bool> OnSyncOwnershipTransfer;
+
     public string uniqueId = "1";
-    private Transform currentOwner;
+
+    
 
     // Subscribe to necessary network events
     public void Awake()
@@ -80,22 +83,8 @@ public class BasisObjectSyncNetworking : MonoBehaviour
     {
         if (UniqueEntityID == uniqueId)
         {
-            if (IsOwner)
-            {
-                currentOwner = LocalNetworkPlayer.transform;
-                Debug.Log("Current Owner Assigned: " + currentOwner.name);
-                if (!iObject.isHeld)
-                {
-                    iObject.PickUp(currentOwner);
-                }
-            }
-            else
-            {
-                if (iObject.isHeld)
-                {
-                    iObject.Drop();
-                }
-            }
+            // forward on to listeners
+            OnSyncOwnershipTransfer?.Invoke(NetIdNewOwner, IsOwner);
         }
     }
 

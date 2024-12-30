@@ -1,100 +1,62 @@
+using System;
+using System.Collections.Generic;
+using Basis.Scripts.Device_Management.Devices;
+using UnityEditor.UI;
 using UnityEngine;
 
-public class InteractableObject : MonoBehaviour
-{
+
+[RequireComponent(typeof(Rigidbody), typeof(Collider))]
+public abstract class InteractableObject: MonoBehaviour {
+    public List<InputSource> InputSources;
+
+    public struct InputSource
+    {
+        public InputSource(BasisInput source, bool isInteracting)
+        {
+            Source = source;
+            IsInteracting = isInteracting;
+        }
+        public BasisInput Source {get; set;}
+        /// <summary>
+        /// - true: source interacting with object
+        /// - false: source hovering
+        /// If not either this source should not be in the list!
+        /// </summary>
+        public bool IsInteracting {get; set;}
+    }
     [Header("Interaction Settings")]
-    public float pickupRange = 1.0f;
+    public float InteractRange = 1.0f;
 
-    [Header("References")]
-    public Renderer objectRenderer;
-    public Material highlightMaterial;
-    public Material originalMaterial;
-    public bool isHeld = false;
-    private Rigidbody rb;
+    abstract public bool IsInteracting();
 
-    public BasisObjectSyncNetworking syncNetworking;
-
-    void Start()
-    {
-        rb = GetComponent<Rigidbody>();
-        if (objectRenderer == null)
-        {
-            objectRenderer = GetComponent<Renderer>();
-        }
-        if (objectRenderer != null)
-        {
-            originalMaterial = objectRenderer.sharedMaterial;
-        }
-
-        syncNetworking = GetComponent<BasisObjectSyncNetworking>();
+    /// <summary>
+    /// Check if object is within range based on its transform and Interact Range
+    /// </summary>
+    /// <param name="inputTransform"></param>
+    /// <returns></returns>
+    public virtual bool IsWithinRange(Transform inputTransform) {
+        return Vector3.Distance(transform.position, inputTransform.position) <= InteractRange;
     }
 
-    public bool IsHeld()
-    {
-        return isHeld;
-    }
+    abstract public bool CanHover(BasisInput input);
 
-    public bool IsWithinRange(Transform playerCamera)
-    {
-        return Vector3.Distance(transform.position, playerCamera.position) <= pickupRange;
-    }
+    abstract public bool CanInteract(BasisInput input);
 
-    public void HighlightObject(bool highlight)
-    {
-        // Debug log to check if HighlightObject is being called correctly
-        Debug.LogError("Highlighting object: " + (highlight ? "ON" : "OFF"));
-        if (objectRenderer && highlightMaterial && originalMaterial)
-        {
-            objectRenderer.sharedMaterial = highlight ? highlightMaterial : originalMaterial;
-        }
-    }
+    abstract public void OnInteractStart(BasisInput input);
 
-    public void PickUp(Transform parent)
-    {
-        if (!isHeld)
-        {
-            isHeld = true;
+    abstract public bool IsInteractingWith(BasisInput input);
 
-            // Disable physics (set Rigidbody to kinematic) while holding
-            rb.isKinematic = true;
+    abstract public void OnInteractEnd(BasisInput input);
 
-            // Parent the object to the player's hand (or camera, etc.)
-            transform.SetParent(parent);
+    abstract public void OnHoverStart(BasisInput input);
 
-            // Store the object's local position relative to the parent
-            transform.localPosition = transform.localPosition;
-            transform.localRotation = transform.localRotation;
+    abstract public void OnHoverEnd(BasisInput input, bool willInteract);
 
-            // Update the networked data (Storeddata) to reflect the position, rotation, and scale
-            syncNetworking.Storeddata.Position = transform.position;
-            syncNetworking.Storeddata.Rotation = transform.rotation;
-            syncNetworking.Storeddata.Scale = transform.localScale;
+    abstract public bool IsHoveredBy(BasisInput input);
+    
+    abstract public void InputUpdate();
 
-            // Set ownership to the local player when they pick up the object
-            syncNetworking.IsOwner = true;
 
-            // Disable object highlight once picked up
-            HighlightObject(false);
-        }
-    }
-
-    public void Drop()
-    {
-        if (isHeld)
-        {
-            isHeld = false;
-
-            // Unparent the object and re-enable physics
-            transform.SetParent(null);
-            rb.isKinematic = false;  // Re-enable physics
-
-            // When dropped, update the networked data to reflect the new position and rotation
-            syncNetworking.Storeddata.Position = transform.position;
-            syncNetworking.Storeddata.Rotation = transform.rotation;
-            syncNetworking.Storeddata.Scale = transform.localScale;
-
-            // Transfer ownership back when dropped | Local player no longer owns the object
-            syncNetworking.IsOwner = false;
-        }
-    }
+    abstract public void OnOwnershipTransfer(bool isOwner);
 }
+
