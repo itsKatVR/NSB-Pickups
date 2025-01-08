@@ -1,17 +1,21 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text.RegularExpressions;
 using Basis.Scripts.Device_Management.Devices;
 using UnityEngine;
+using UnityEngine.LowLevelPhysics;
 
+[RequireComponent(typeof(Collider))]
 public class ReparentInteractable : InteractableObject
 {
     [Header("References")]
-    public Renderer objectRenderer;
-    public Material highlightMaterial;
-    public Material originalMaterial;
+    public Collider colliderRef;
     private Rigidbody rb;
 
+    private GameObject HighlightClone;
     public BasisObjectSyncNetworking syncNetworking;
+
+    public static string LoadMaterialAddress = "Assets/Interactable/Material/Highlight.mat";
 
     void Start()
     {
@@ -21,24 +25,69 @@ public class ReparentInteractable : InteractableObject
         };
 
         rb = GetComponent<Rigidbody>();
-        if (objectRenderer == null)
+        if (colliderRef == null)
         {
-            objectRenderer = GetComponent<Renderer>();
-        }
-        if (objectRenderer != null)
-        {
-            originalMaterial = objectRenderer.sharedMaterial;
+            colliderRef = GetComponent<Collider>();
         }
 
         syncNetworking = GetComponent<BasisObjectSyncNetworking>();
+
+
+        var components = new Type[] {typeof(MeshRenderer), typeof(MeshFilter)};
+        HighlightClone = CloneMesh(gameObject.GetComponent<Collider>());
+        HighlightClone.name = "HighlightClone";
+
+    }
+
+    private GameObject CloneMesh(Collider collider) {
+        GameObject primitive = null;
+        switch (collider.GeometryHolder.Type)
+        {
+            case GeometryType.Sphere:
+                var sphere = collider.GetComponent<SphereCollider>();
+                primitive = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                var newSphere = primitive.GetComponent<SphereCollider>();
+                newSphere.transform.localPosition = sphere.center;
+                newSphere.transform.localScale = new Vector3(sphere.radius * 2, sphere.radius * 2, sphere.radius * 2);
+                break;
+            case GeometryType.Capsule:
+                var capsule = collider.GetComponent<CapsuleCollider>();
+                primitive = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                var newCapsule = primitive.GetComponent<CapsuleCollider>();
+                // TODO
+                break;
+            case GeometryType.Box:
+                primitive = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                break;
+            // not sure how to get the hull generated for this, just use the triangle mesh
+            case GeometryType.ConvexMesh:
+            case GeometryType.TriangleMesh:
+                MeshFilter sourceMesh = gameObject.GetComponent<MeshFilter>();
+                if(sourceMesh == null)
+                {
+                    return null;
+                }
+                var meshClone = new GameObject();
+                meshClone.AddComponent<MeshFilter>();
+                meshClone.GetComponent<MeshFilter>().mesh = sourceMesh.mesh;
+                // return immediately, mesh should be the same size that we are using
+                return meshClone;
+            // dont know how to handle remaning types 
+            case GeometryType.Terrain:
+            case GeometryType.Invalid:
+            default:
+                break;
+        }
+        
+        return primitive;
     }
 
 
     public void HighlightObject(bool highlight)
     {
-        if (objectRenderer && highlightMaterial && originalMaterial)
+        if (colliderRef && HighlightClone)
         {
-            objectRenderer.sharedMaterial = highlight ? highlightMaterial : originalMaterial;
+            HighlightClone.SetActive(highlight);
         }
     }
 
@@ -100,7 +149,7 @@ public class ReparentInteractable : InteractableObject
             InputSources[0] = new InputSource(null, false);
 
             syncNetworking.IsOwner = false;
-            Debug.LogError("InteractEnd");
+            // Debug.LogError("InteractEnd");
         }
     }
 
