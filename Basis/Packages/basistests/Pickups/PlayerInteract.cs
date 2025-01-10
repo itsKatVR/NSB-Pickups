@@ -13,6 +13,7 @@ using UnityEngine.AddressableAssets;
 using Unity.Burst;
 using System;
 using Unity.Collections;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 public class PlayerInteract : MonoBehaviour
 {
@@ -32,11 +33,9 @@ public class PlayerInteract : MonoBehaviour
     }
 
     public Dictionary<int, PickupDevice> pickupDevices = new Dictionary<int, PickupDevice>();
-    public Dictionary<int, InteractableObject> hoverTargets = new Dictionary<int, InteractableObject>();
-    // pointed targets gets handled per simulate frame
-
 
     public Material lineMaterial;
+    private AsyncOperationHandle<Material> asyncOperationLineMaterial;
     public float interactLineWidth = 0.015f;
     public bool renderInteractLine = true;
 
@@ -50,12 +49,17 @@ public class PlayerInteract : MonoBehaviour
         BasisDeviceManagement.Instance.AllInputDevices.OnListChanged += OnInputChanged;
         BasisDeviceManagement.Instance.AllInputDevices.OnListItemRemoved += OnInputRemoved;
 
-        UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationHandle<Material> op = Addressables.LoadAssetAsync<Material>(LoadMaterialAddress);
+        AsyncOperationHandle<Material> op = Addressables.LoadAssetAsync<Material>(LoadMaterialAddress);
         lineMaterial = op.WaitForCompletion();
-        Debug.LogError(gameObject);
+        op.Release();
+        // Debug.LogError(gameObject);
     }
     public void OnDestroy()
     {
+        if(asyncOperationLineMaterial.IsValid())
+        {
+            asyncOperationLineMaterial.Release();
+        }
         BasisLocalPlayer.Instance.LocalBoneDriver.OnSimulate -= Simulate;
         BasisDeviceManagement.Instance.AllInputDevices.OnListChanged -= OnInputChanged;
         BasisDeviceManagement.Instance.AllInputDevices.OnListItemRemoved -= OnInputRemoved;
@@ -69,17 +73,23 @@ public class PlayerInteract : MonoBehaviour
         for (int Index = 0; Index < count; Index++)
         {
             BasisInput device = BasisDeviceManagement.Instance.AllInputDevices[Index];
+            if (!device)
+            {
+                return;
+            }
+                
             // if we can raycast retain in our devices.
-            if (device.BasisDeviceMatchableNames.HasRayCastSupport && !pickupDevices.ContainsKey(Index))
+            if (device.BasisDeviceMatchableNames != null && device.BasisDeviceMatchableNames.HasRayCastSupport && !pickupDevices.ContainsKey(Index))
             {
                 AddInput(device, Index);
             }
             // new device at the same index
-            else if (device.BasisDeviceMatchableNames.HasRayCastSupport && pickupDevices.ContainsKey(Index) && pickupDevices[Index].input.GetInstanceID() != device.GetInstanceID())
+            else if (device.BasisDeviceMatchableNames != null && device.BasisDeviceMatchableNames.HasRayCastSupport && pickupDevices.ContainsKey(Index) && pickupDevices[Index].input.GetInstanceID() != device.GetInstanceID())
             {
                 RemoveInput(Index);
                 AddInput(device, Index);
             }
+            // TODO: what if it has no matchable name?
             // device removed handled elsewhere
         }
     }
@@ -94,6 +104,7 @@ public class PlayerInteract : MonoBehaviour
         }
     }
 
+    // simulate after IK update
     [BurstCompile]
     private void Simulate()
     {
@@ -130,8 +141,7 @@ public class PlayerInteract : MonoBehaviour
 
 
             RaycastHit rayHit;
-            // TODO: Interact layer mayhaps?
-            // TODO: Ignore layers (player ect.)
+            // TODO: Interact layer
             if (Physics.Raycast(ray, out rayHit, raycastDistance) || hoverSphere.HoverTarget != null)
             {
 
@@ -352,8 +362,21 @@ public class PlayerInteract : MonoBehaviour
 
     private void RemoveInput(int Index)
     {
-        Destroy(pickupDevices[Index].interactOrigin);
-        pickupDevices.Remove(Index);
+        if (pickupDevices.TryGetValue(Index, out PickupDevice device))
+        {
+            if (device.lastTarget.IsHoveredBy(device.input))
+            {
+                device.lastTarget.OnHoverEnd(device.input, false);
+            }
+
+            if (device.lastTarget.IsInteractingWith(device.input))
+            {
+                device.lastTarget.OnInteractEnd(device.input);
+            }
+
+            Destroy(device.interactOrigin);
+            pickupDevices.Remove(Index);
+        }
     }
 
     private void AddInput(BasisInput input, int Index)
@@ -363,7 +386,7 @@ public class PlayerInteract : MonoBehaviour
         GameObject interactOrigin = new GameObject("Interact Origin", components);
         interactOrigin.transform.SetParent(input.transform);
         interactOrigin.layer = LayerMask.NameToLayer("Ignore Raycast");
-        // TODO: custom config to use center of palm instead of raycast offset 
+        // TODO: custom config to use center of palm instead of raycast offset (IK palm? but that breaks input on a bad avi upload, no?)
         interactOrigin.transform.localPosition = input.BasisDeviceMatchableNames.PositionRayCastOffset;
         interactOrigin.transform.localRotation = Quaternion.Euler(input.BasisDeviceMatchableNames.RotationRaycastOffset);
 
@@ -397,7 +420,7 @@ public class PlayerInteract : MonoBehaviour
     {
         foreach (var device in pickupDevices.Values)
         {
-            // point grab
+            // pointer line
             Gizmos.DrawLine(device.interactOrigin.transform.position, device.interactOrigin.transform.position + device.interactOrigin.transform.forward * raycastDistance);
 
             // hover target line
