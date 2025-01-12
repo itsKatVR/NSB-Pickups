@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [RequireComponent(typeof(SphereCollider))]
-public class HoverInteract : MonoBehaviour
+public class HoverInteractSphere : MonoBehaviour
 {
 
     public InteractableObject HoverTarget;
@@ -10,19 +10,17 @@ public class HoverInteract : MonoBehaviour
     public Vector3 TargetClosestPoint = Vector3.zero;
 
     private SphereCollider sphereColliderRef;
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
+
     void Start()
     {
-        sphereColliderRef = gameObject.GetComponent<SphereCollider>();
+        gameObject.TryGetComponent(out sphereColliderRef);
         ResetTarget();
     }
 
     // trigger stay does our updating so we dont need to manage a list of everything in bounds
     private void OnTriggerStay(Collider other)
     {
-        InteractableObject otherInteractable = other.GetComponent<InteractableObject>();
-
-        if (otherInteractable != null && sphereColliderRef != null)
+        if (sphereColliderRef != null && other.TryGetComponent(out InteractableObject otherInteractable))
         {
             Vector3 otherClosestPoint = other.ClosestPoint(transform.position);
             float otherDistance = Vector3.Distance(otherClosestPoint, transform.position);
@@ -43,9 +41,8 @@ public class HoverInteract : MonoBehaviour
 
     private void OnTriggerExit(Collider other)
     {
-        InteractableObject otherInteractable = other.GetComponent<InteractableObject>();
         // current target left
-        if (otherInteractable != null && HoverTarget.GetInstanceID() == otherInteractable.GetInstanceID())
+        if (other.TryGetComponent(out InteractableObject otherInteractable) && HoverTarget.GetInstanceID() == otherInteractable.GetInstanceID())
         {
             ResetTarget();
         }

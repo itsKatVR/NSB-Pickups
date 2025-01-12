@@ -58,10 +58,6 @@ namespace Basis.Scripts.Device_Management.Devices
             BasisBoneTrackedRole = BasisBoneTrackedRole.CenterEye;
             return false;
         }
-        public bool IsDesktopCenterEye()
-        {
-            return hasRoleAssigned && trackedRole == BasisBoneTrackedRole.CenterEye;
-        }
         public void AssignRoleAndTracker(BasisBoneTrackedRole Role)
         {
             hasRoleAssigned = true;

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// TODO: normals are just wrong.
 public class CapsuleMeshGenerator
 {
     public static Mesh CreateCapsuleMesh(float radius, float height, int segments)
@@ -11,8 +10,6 @@ public class CapsuleMeshGenerator
 
         segments = segments % 2 != 0 ? segments + 1 : segments;
 
-
-        // Ensure the height accommodates the hemispheres
         float cylinderHeight = Math.Max(height - 2 * radius, 0);
 
         var vertices = new List<Vector3>();
@@ -27,14 +24,10 @@ public class CapsuleMeshGenerator
         // Cylinder
         GenerateCylinder(vertices, triangles, normals, radius, cylinderHeight, segments);
 
-
-        // Assign vertices and triangles to mesh
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
         mesh.normals = normals.ToArray();
         
-        
-        // mesh.RecalculateNormals();
         mesh.RecalculateTangents();
         mesh.Optimize();
 
@@ -61,8 +54,12 @@ public class CapsuleMeshGenerator
                 float x = ringRadius * Mathf.Cos(lonAngle);
                 float z = ringRadius * Mathf.Sin(lonAngle);
 
-                vertices.Add(new Vector3(x, y + yOffset, z));
-                normals.Add(new Vector3(0, isNorth ? 1f : -1f, 0));
+                Vector3 vertex = new Vector3(x, y + yOffset, z);
+                vertices.Add(vertex);
+                
+                // Calculate proper surface normal
+                Vector3 normal = new Vector3(x, y, z).normalized;
+                normals.Add(normal);
 
                 if (lat < hemisphereSegments && lon < segments)
                 {
@@ -104,7 +101,6 @@ public class CapsuleMeshGenerator
 
         int baseIndex = vertices.Count;
 
-        // Create top and bottom circles
         for (int i = 0; i <= 1; i++)
         {
             float y = (i == 0 ? 1 : -1) * height / 2;
@@ -116,11 +112,13 @@ public class CapsuleMeshGenerator
                 float z = radius * Mathf.Sin(lonAngle);
 
                 vertices.Add(new Vector3(x, y, z));
-                normals.Add(new Vector3(x, 0, z));
+                
+                // Calculate cylinder surface normal (points outward from central axis)
+                Vector3 normal = new Vector3(x, 0, z).normalized;
+                normals.Add(normal);
             }
         }
 
-        // Connect top and bottom circles
         for (int lon = 0; lon < segments; lon++)
         {
             int topCurrent = baseIndex + lon;

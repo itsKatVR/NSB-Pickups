@@ -14,9 +14,8 @@ GameObject:
   - component: {fileID: 2600401473938556946}
   - component: {fileID: 1001019263030247314}
   - component: {fileID: 5036961803400065188}
-  - component: {fileID: 1241167370178228159}
-  m_Layer: 0
-  m_Name: TestPickup
+  m_Layer: 8
+  m_Name: PickupInteractable
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -150,32 +149,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 690ab0b52a9b06b4498ad303592416aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pickupRange: 1
-  objectRenderer: {fileID: 6944634814044429668}
-  highlightMaterial: {fileID: 2100000, guid: d493c777ec2122f44b6c648a5024c42a, type: 2}
-  originalMaterial: {fileID: 2100000, guid: 854a30c899c32884ba633e27cb04f3f5, type: 2}
-  isHeld: 0
-  syncNetworking: {fileID: 0}
---- !u!114 &1241167370178228159
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8381068889838832174}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 79f4379d9a24e0f47ba1589762550575, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  MessageIndex: 0
-  byteArray: 
-  IsOwner: 0
-  LerpMultiplier: 3
-  LocalNetworkPlayer: {fileID: 0}
-  DeliveryMethod: 2
-  previousPosition: {x: 0, y: 0, z: 0}
-  previousRotation: {x: 0, y: 0, z: 0, w: 0}
-  previousScale: {x: 0, y: 0, z: 0}
-  NeedsAUpdate: 0
-  Rigidbody: {fileID: 1001019263030247314}
+  InteractRange: 1
+  CanEquip: 0
+  equipPos: {x: 0, y: 0, z: 0}
+  equipRot: {x: 0, y: 0, z: 0, w: 0}
+  KinematicWhileInteracting: 1
+  LocalOnly: 1
+  ColliderRef: {fileID: 0}
+  RigidRef: {fileID: 0}
+  ConstraintRef: {fileID: 0}
